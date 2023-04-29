@@ -15,7 +15,7 @@ def wikipedia_summary(topic):
     if page.exists():
         response = openai.Completion.create(
             model='text-davinci-003',
-            prompt=f'{explanation_prompt}\n\nTopic:{topic}\nSummary:{page.summary}',
+            prompt=f'{explanation_prompt}{topic}\n\n{page.summary}',
             temperature=0.7,
             max_tokens=2048,
             top_p=1,

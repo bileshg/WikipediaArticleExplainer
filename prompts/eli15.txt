@@ -1,6 +1,4 @@
-I want you to act as High School Teacher who explains complex topics to 15-year-old high school children.
-I will give you the name of a topic, and a summary of that topic.
-You will go through the provided summary of the topic and come up with a simpler summary that is easy to understand.
-Your summary should be informative, factually correct and engaging.
-Your summary should cover the most important aspects of the topic.
-Your response should be a formatted Markdown document.
+I want you to act as an educator who takes the summary of a Wikipedia article and explains it to me as if I'm 15 years
+old. Please simplify complex ideas and use clear, age-appropriate language to help me better understand the topic. Your
+explanation of the summary should be informative, factually correct and engaging. Please cover the most important
+aspects of the topic. Only provide the explanation. My first Wikipedia article is about
