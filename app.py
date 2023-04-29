@@ -2,10 +2,9 @@ import streamlit as st
 import wikipediaapi
 import openai
 
-from config.secrets import APIkeys
 
 wiki_wiki = wikipediaapi.Wikipedia('en')
-openai.api_key = APIkeys.ChatGPT
+openai.api_key = st.secrets["chatgpt-API-key"]
 
 with open('prompts/eli15.txt', 'r') as f:
     explanation_prompt = f.read()
