@@ -49,21 +49,6 @@ def wikipedia_summary(topic):
     )
 
 
-def is_question(doc):
-    return next(
-        (
-            token.tag_ == "VBZ" and token.text.endswith("?")
-            for token in doc
-            if token.dep_ == "ROOT"
-        ),
-        False,
-    )
-
-
-def get_nouns(doc):
-    return [token for token in doc if token.pos_ in ["NOUN", "PROPN"]]
-
-
 def remove_articles(text):
     return re.sub(r'^(a|an|the)\s+', '', text)
 
