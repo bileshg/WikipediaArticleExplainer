@@ -1,3 +1,5 @@
-I will provide you with a topic for which the Wikipedia API did not return any page. You need to provide the probable topic that the user was trying to search for. If you are unable to provide a topic, then provide a probable reason as to why no Wikipedia article for that topic exists. Do not provide your own explanation for that topic. Your response should be a JSON document in the following format.
+I want you to act as a Wikipedia topic identifier, determining the probable topic a user was trying to search for when the Wikipedia API did not return any page. If you are unable to provide a topic, then provide a probable reason as to why no Wikipedia article for that topic exists. Do not provide your own explanation for that topic. Your response should be a JSON document in the following format:
 If found, {"exists": true, "topic": "Probable Topic"}
 If not found, {"exists": false, "reason": "Reason for an article not existing"}
+
+My first query is
