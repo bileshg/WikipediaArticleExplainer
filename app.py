@@ -1,6 +1,6 @@
-import base64
 import json
 import re
+import requests
 import streamlit as st
 import wikipediaapi
 import openai
@@ -12,9 +12,6 @@ openai.api_key = st.secrets["chatgpt-API-key"]
 
 with open('prompts/eli15.txt', 'r') as f:
     explanation_prompt = f.read()
-
-with open('prompts/not_found.txt', 'r') as f:
-    not_found_prompt = f.read()
 
 
 def ask_gpt(prompt, model='text-davinci-002', temperature=0.7):
@@ -74,28 +71,33 @@ def process_as_sentence(text):
     return True, ask_gpt(prompt), sources
 
 
+def search_wikipedia(query):
+    url = 'https://en.wikipedia.org/w/api.php'
+    params = {
+        'action': 'query',
+        'origin': '*',
+        'format': 'json',
+        'generator': 'search',
+        'gsrnamespace': 0,
+        'gsrlimit': '5',
+        'gsrsearch': query
+    }
+
+    data = requests.get(url, params=params).json()
+
+    return [
+        f"{data['query']['pages'][i]['title']} - http://en.wikipedia.org/wiki/?curid={data['query']['pages'][i]['pageid']}"
+        for i in data['query']['pages']
+    ]
+
+
 def not_found_handler(topic):
-    st.warning("This could take a while...")
+    articles = search_wikipedia(topic)
 
-    not_found_response = ask_gpt(f'{not_found_prompt} \"{topic}\"', temperature=0)
-
-    try:
-        response_json = json.loads(not_found_response)
-    except json.JSONDecodeError:
-        return False, f"Something went wrong! Error Code: {base64.b64encode(not_found_response)}", None
-
-    if not response_json['exists']:
-        return False, response_json['reason'], None
-
-    page = wiki_wiki.page(response_json['topic'])
     return (
-        get_explanation(page)
-        if page.exists()
-        else (
-            False,
-            'Sorry, I was unable to find a Wikipedia article on this subject...',
-            None,
-        )
+        False,
+        'Sorry, unable to determine the topic against the query...',
+        articles
     )
 
 
@@ -118,6 +120,8 @@ def main():
             st.success('Done!')
         else:
             st.error(summary)
+            articles_str = '\n'.join(f'- {source}' for source in sources)
+            st.write(f'Were you looking for any of the following articles?\n{articles_str}')
 
 
 if __name__ == '__main__':
