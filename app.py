@@ -1,4 +1,3 @@
-import json
 import re
 import requests
 import streamlit as st
@@ -6,6 +5,7 @@ import wikipediaapi
 import openai
 import spacy_streamlit
 
+wiki_base_url = 'https://en.wikipedia.org'
 wiki_wiki = wikipediaapi.Wikipedia('en')
 spacy_model = "en_core_web_sm"
 openai.api_key = st.secrets["chatgpt-API-key"]
@@ -72,7 +72,7 @@ def process_as_sentence(text):
 
 
 def search_wikipedia(query):
-    url = 'https://en.wikipedia.org/w/api.php'
+    url = f'{wiki_base_url}/w/api.php'
     params = {
         'action': 'query',
         'origin': '*',
@@ -85,10 +85,13 @@ def search_wikipedia(query):
 
     data = requests.get(url, params=params).json()
 
-    return [
-        f"{data['query']['pages'][i]['title']} - http://en.wikipedia.org/wiki/?curid={data['query']['pages'][i]['pageid']}"
-        for i in data['query']['pages']
-    ]
+    articles = []
+    for k in data['query']['pages']:
+        title = data['query']['pages'][k]['title']
+        url = f"{wiki_base_url}/wiki/?curid={data['query']['pages'][k]['pageid']}"
+        articles.append(f"{title} - {url}")
+
+    return articles
 
 
 def not_found_handler(topic):
