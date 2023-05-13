@@ -1,107 +1,101 @@
-import re
-import requests
+import os
 import streamlit as st
 import wikipediaapi
 import openai
-import spacy_streamlit
+from langchain.llms import OpenAI
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from langchain.utilities import WikipediaAPIWrapper
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.docstore.document import Document
+from langchain.chains.summarize import load_summarize_chain
 
-wiki_base_url = 'https://en.wikipedia.org'
 wiki_wiki = wikipediaapi.Wikipedia('en')
-spacy_model = "en_core_web_sm"
+os.environ['OPENAI_API_KEY'] = st.secrets["chatgpt-API-key"]
 openai.api_key = st.secrets["chatgpt-API-key"]
 
-with open('prompts/eli15.txt', 'r') as f:
-    explanation_prompt = f.read()
+
+class Explainer:
+
+    def __init__(self, prompt, model='text-davinci-003', temperature=0.8):
+        self.model = model
+        self.temperature = temperature
+        self.prompt = prompt
+        self._prompt_template = PromptTemplate(
+            input_variables=['topic', 'wikipedia_research'],
+            template=prompt + "\nThe topic is \"{topic}\" and the related Wikipedia Research is as follows."
+                              "\n{wikipedia_research}"
+        )
+        self._langchain_explainer = None
+
+    def _ask(self, prompt):
+        response = openai.Completion.create(
+            model=self.model,
+            prompt=prompt,
+            temperature=self.temperature,
+            max_tokens=2048,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0
+        )
+        return response['choices'][0]['text']
+
+    def explain(self, topic):
+        page = wiki_wiki.page(topic)
+
+        if page.exists():
+            explanation = self._ask(
+                self._prompt_template.format(topic=topic, wikipedia_research=page.summary)
+            )
+            source = f'Source:\n- {page.fullurl}'
+            return explanation, source
+
+        return None, None
 
 
-def ask_gpt(prompt, model='text-davinci-002', temperature=0.7):
-    response = openai.Completion.create(
-        model=model,
-        prompt=prompt,
-        temperature=temperature,
-        max_tokens=2048,
-        top_p=1,
-        frequency_penalty=0,
-        presence_penalty=0
-    )
-    return response['choices'][0]['text']
+class LangchainExplainer:
+
+    def __init__(self, prompt, model='text-davinci-003', temperature=0.8, max_tokens=2048):
+        self._llm = OpenAI(model_name=model, temperature=temperature, max_tokens=max_tokens)
+        self._prompt_template = PromptTemplate(
+            input_variables=['topic', 'wikipedia_research'],
+            template=prompt + "\nThe topic is \"{topic}\" and the related Wikipedia Research is as follows."
+                              "\n{wikipedia_research}"
+        )
+        self._llm_chain = LLMChain(
+            llm=self._llm,
+            prompt=self._prompt_template,
+            verbose=True
+        )
+
+        self._wiki = WikipediaAPIWrapper()
+        self._text_splitter = CharacterTextSplitter()
+
+    def explain(self, topic):
+        # Wikipedia Research
+        wikipedia_research = self._wiki.run(topic)
+
+        # Get Explanation
+        response = self._llm_chain.run(topic=topic, wikipedia_research=wikipedia_research)
+
+        return response, wikipedia_research
 
 
-def get_explanation(wikipedia_page):
-    explanation = ask_gpt(
-        f'{explanation_prompt}\n\nTopic:{wikipedia_page.title}\nSummary:{wikipedia_page.summary}',
-        model='text-davinci-003',
-        temperature=0.8
-    )
-    return True, explanation, [wikipedia_page.fullurl]
+class ExplanationRefiner:
 
+    def __init__(self, model='text-davinci-003', temperature=0, max_tokens=2048):
+        self._llm = OpenAI(model_name=model, temperature=temperature, max_tokens=max_tokens)
+        self._text_splitter = CharacterTextSplitter()
 
-def wikipedia_summary(topic):
-    page = wiki_wiki.page(topic)
+    def refine(self, text):
+        # Split Explanation into Sentences
+        texts = self._text_splitter.split_text(text)
+        docs = [Document(page_content=t) for t in texts]
 
-    return (
-        get_explanation(page)
-        if page.exists()
-        else process_as_sentence(topic)
-    )
+        # Refine Explanation
+        refine_chain = load_summarize_chain(self._llm, chain_type="refine")
 
-
-def remove_articles(text):
-    return re.sub(r'^(a|an|the)\s+', '', text)
-
-
-def process_as_sentence(text):
-    nlp = spacy_streamlit.load_model(spacy_model)
-    doc = nlp(text)
-
-    summaries = []
-    sources = []
-    for chunk in doc.noun_chunks:
-        if chunk.ents:
-            st.info(f'Processing chunk: **{chunk.text}**')
-            page = wiki_wiki.page(remove_articles(chunk.text))
-            if page.exists():
-                summaries.append(page.summary)
-                sources.append(page.fullurl)
-
-    if not summaries:
-        return not_found_handler(text)
-
-    prompt = "\n\n".join(summaries) + "\n\n" + text
-    return True, ask_gpt(prompt), sources
-
-
-def search_wikipedia(query):
-    url = f'{wiki_base_url}/w/api.php'
-    params = {
-        'action': 'query',
-        'origin': '*',
-        'format': 'json',
-        'generator': 'search',
-        'gsrnamespace': 0,
-        'gsrlimit': '5',
-        'gsrsearch': query
-    }
-
-    data = requests.get(url, params=params).json()
-
-    articles = []
-    for k in data['query']['pages']:
-        title = data['query']['pages'][k]['title']
-        url = f"{wiki_base_url}/wiki/?curid={data['query']['pages'][k]['pageid']}"
-        articles.append(f"{title} - {url}")
-
-    return articles
-
-
-def not_found_handler(topic):
-    articles = search_wikipedia(topic)
-
-    return (
-        False,
-        'Sorry, unable to determine the topic against the query...',
-        articles
-    )
+        return refine_chain.run(docs)
 
 
 def main():
@@ -112,19 +106,37 @@ def main():
     If I find an article on the provided topic, I summarize it in simple terms.
     If I don\'t find an article on the provided topic, I try to find an article on a similar topic and summarize that.
     """)
+
+    with open('prompts/eli15.txt', 'r') as f:
+        explanation_prompt = f.read()
+    explainer = Explainer(explanation_prompt)
+    langchain_explainer = LangchainExplainer(explanation_prompt)
+    refiner = ExplanationRefiner()
+
     if topic := st.text_input('Just provide the topic or subject you want to know about!',
                               placeholder='Topic'):
-        with st.spinner('Fetching information and summarizing...'):
-            success, summary, sources = wikipedia_summary(topic)
-        if success:
-            st.write(summary)
-            sources_str = '\n'.join(f'- {source}' for source in sources)
-            st.write(f'Sources:\n{sources_str}')
-            st.success('Done!')
+        content = st.empty()
+        references = st.empty()
+        with st.spinner('Fetching information...'):
+            summary, source = explainer.explain(topic)
+
+        if summary:
+            with st.spinner('Summarizing...'):
+                refined_summary = refiner.refine(summary)
+
+            content.write(refined_summary)
+            references.write(source)
         else:
-            st.error(summary)
-            articles_str = '\n'.join(f'- {source}' for source in sources)
-            st.write(f'Were you looking for any of the following articles?\n{articles_str}')
+            with st.spinner('Researching...'):
+                lc_summary, wikipedia_research = langchain_explainer.explain(topic)
+
+            with st.spinner('Refining explanation...'):
+                refined_lc_summary = refiner.refine(lc_summary)
+
+            content.write(refined_lc_summary)
+
+            with references.expander('Wikipedia Research'):
+                st.write(wikipedia_research)
 
 
 if __name__ == '__main__':
