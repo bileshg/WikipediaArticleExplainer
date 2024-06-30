@@ -19,7 +19,7 @@ openai.api_key = st.secrets["chatgpt-API-key"]
 
 class Explainer:
 
-    def __init__(self, prompt, model='text-davinci-003', temperature=0.8, max_tokens=2048):
+    def __init__(self, prompt, model='gpt-3.5-turbo-instruct', temperature=0.8, max_tokens=2048):
         self.model = model
         self.temperature = temperature
         self.prompt = prompt
@@ -58,7 +58,7 @@ class Explainer:
 
 class LangchainExplainer:
 
-    def __init__(self, prompt, model='text-davinci-003', temperature=0.8, max_tokens=2048):
+    def __init__(self, prompt, model='gpt-3.5-turbo-instruct', temperature=0.8, max_tokens=2048):
         self._llm = OpenAI(model_name=model, temperature=temperature, max_tokens=max_tokens)
         self._prompt_template = PromptTemplate(
             input_variables=['topic', 'wikipedia_research'],
@@ -90,7 +90,7 @@ class LangchainExplainer:
 
 class ExplanationRefiner:
 
-    def __init__(self, model='text-davinci-003', temperature=0, max_tokens=2048):
+    def __init__(self, model='gpt-4o', temperature=0, max_tokens=2048):
         self._llm = OpenAI(model_name=model, temperature=temperature, max_tokens=max_tokens)
         self._text_splitter = CharacterTextSplitter()
 
